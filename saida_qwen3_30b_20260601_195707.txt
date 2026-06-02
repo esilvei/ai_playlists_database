@@ -1,0 +1,641 @@
+/* =========================================================
+   LOG DE AUDITORIA   
+   Data/Hora: 2026-06-01 19:57:07
+   Modelo Utilizado: qwen3:30b
+   =========================================================
+   PROMPT ENVIADO:
+   Aja como um Arquiteto de Banco de Dados Sênior. Sua tarefa é ler os Requisitos de Negócio e o mapeamento do Diagrama Entidade-Relacionamento (ER) abaixo para projetar o Esquema Físico (DDL) e os Dados Iniciais (DML) em PostgreSQL. Siga as regras técnicas estritas e faça adaptações estruturais apenas se for vital para a integridade do banco.
+
+[REQUISITOS DE NEGÓCIO]
+Uma startup de tecnologia musical deseja desenvolver um sistema interno para gerenciar, auditar e rastrear a criação de playlists personalizadas geradas por Inteligência Artificial. Atualmente, os curadores da empresa utilizam ferramentas soltas para buscar músicas, analisar suas características sonoras e agrupá-las, o que gera inconsistências. Para resolver isso, a empresa decidiu construir um banco de dados relacional robusto que atuará como o núcleo de todo o catálogo musical e do histórico de curadoria, permitindo uma integração fluida com a API do Spotify e garantindo total rastreabilidade.
+Para manter a consistência do acervo, o banco de dados deve registrar informações detalhadas sobre os Artistas. Cada artista deve possuir um código de identificação único (proveniente do Spotify) para evitar duplicidade de nomes homônimos, além de armazenar seu nome completo e um índice de popularidade atualizado. Sabendo que a categorização musical é complexa, o sistema precisa catalogar os diversos Gêneros musicais existentes. Como um artista pode transitar por estilos muito diferentes ao longo da carreira, o sistema deve permitir que um mesmo artista seja classificado em vários gêneros, assim como um gênero pode englobar múltiplos artistas.
+Os artistas são os responsáveis por lançar os Álbuns. O sistema deve registrar o código único de cada álbum, o título da obra, a data de lançamento oficial e o tipo de lançamento (se é um 'single', um 'EP' ou um álbum completo). Para garantir a integridade da informação, um álbum deve obrigatoriamente pertencer a um artista específico, não podendo existir álbuns 'órfãos' no banco de dados.
+Dentro de cada álbum, o banco catalogará as Músicas (ou faixas). Esta é a entidade mais crítica do sistema. Além do código de identificação único de cada música, nome e duração em milissegundos, o banco de dados precisa armazenar os metadados acústicos (audio features) fornecidos pela API. Estes dados incluem índices numéricos detalhados para a energia da música, a valência (que mede a positividade ou obscuridade da faixa), a dançabilidade e o tempo (em BPM). A precisão dessas informações é fundamental, pois será a base matemática que a Inteligência Artificial utilizará para cruzar dados e selecionar as faixas adequadas no futuro. Cada música está vinculada a um único álbum.
+A operação do sistema será feita por Usuários internos da empresa (os curadores). O banco deve armazenar o identificador do usuário, seu nome, e-mail institucional e a data de cadastro. Esses usuários farão requisições textuais (prompts) para a IA solicitando compilações específicas, como por exemplo: 'Criar uma lista de faixas de metal com BPM alto e baixa valência'.
+Para manter a auditoria rígida exigida pela diretoria, toda vez que a IA processar um pedido, o sistema deve registrar a Playlist gerada. O registro desta playlist deve conter um código de identificação próprio, o link de integração para a plataforma de streaming, a data e hora exata da criação, e, mais importante, deve estar obrigatoriamente vinculada ao usuário que fez a solicitação. Além disso, o sistema deve possuir um Log de Auditoria (Prompts), que armazene o texto exato digitado pelo usuário e os parâmetros médios que a IA tentou atingir (ex: energia alvo), para fins de rastreabilidade.
+Por fim, é imprescindível saber exatamente quais faixas compõem cada curadoria. Para isso, o banco de dados deve rastrear detalhadamente os Itens da Playlist. O sistema deve registrar quais músicas foram alocadas em quais playlists, permitindo que uma mesma música seja utilizada em diversas compilações diferentes ao longo do tempo. Para garantir a experiência de reprodução, este registro de alocação também deve armazenar a posição sequencial (ordem de execução) de cada música dentro de uma playlist específica. Com todas essas informações cruzadas, o chefe de curadoria poderá emitir relatórios mensais que demonstrem quais gêneros são mais requisitados, a média de energia das playlists criadas por cada usuário e quais artistas dominam as curadorias geradas pela inteligência artificial.
+
+[MAPEAMENTO DO DIAGRAMA ER]
+O banco deve seguir ESTRITAMENTE as entidades, atributos e relacionamentos definidos no diagrama oficial:
+- Usuário: Atributos id_usuario (PK), nome, email_institucional, data_cadastro.
+- Artista: Atributos id_spotify (PK), nome_completo, indice_popularidade.
+- Gênero: Atributos id_genero (PK), nome.
+- Álbum: Atributos id_album (PK), titulo, data_lancamento, tipo_lancamento. Relaciona-se com Artista (um artista Lança vários álbuns).
+- Música: Atributos id_musica (PK), nome, duracao_ms, energia, valencia, dancabilidade, bpm. Relaciona-se com Álbum (um álbum Possui várias músicas).
+- Playlist: Atributos id_playlist (PK), log_texto_pedido, log_parametros_ia, link_streaming, data_hora_criacao. Relaciona-se com Usuário (um usuário Solicita várias playlists).
+- Pertence (Tabela Associativa Artista_Genero): Relação N:N entre Artista e Gênero.
+- Contém (Tabela Associativa Playlist_Musica): Relação N:N entre Playlist e Música. OBRIGATÓRIO conter o atributo posicao para definir a ordem sequencial da faixa.
+
+[REGRAS TÉCNICAS OBRIGATÓRIAS]
+- Normalize o banco na Terceira Forma Normal (3NF).
+- Habilite a extensão 'pgcrypto' e use UUID como chave primária autogerada para Usuário e Playlist.
+- Use VARCHAR para os identificadores originais do Spotify (id_spotify, id_album, id_musica).
+- As métricas acústicas (energia, valencia, dancabilidade) devem ser FLOAT/REAL com restrições (CHECK) entre 0.0 e 1.0.
+- Aplique ON DELETE CASCADE nas chaves estrangeiras.
+
+[CARGA DE DADOS - DML]
+Gere scripts de INSERT INTO populando as tabelas com:
+- 1 usuário curador.
+- 3 gêneros diversificados (Metal, Samba e Música Clássica).
+- 2 artistas relevantes pertencentes a esses gêneros (deixando 1 gênero propositalmente sem artista).
+- 2 álbuns e 4 músicas.
+- Crie 1 registro em Playlist simulando um pedido textual de "alta energia" e mapeie 2 músicas para ela na tabela Contém, preenchendo a posicao.
+
+Entregue apenas o código SQL limpo e formatado.
+   ========================================================= */
+
+Okay, let's tackle this database design problem. So, the user wants a PostgreSQL schema based on the business requirements and ER diagram provided. Let me start by going through the requirements again to make sure I don't miss anything.
+
+First, the business requirements mention several entities: Artists, Genres, Albums, Songs, Users, Playlists, and their relationships. The ER mapping provided gives the structure, so I need to follow that exactly. The key points are:
+
+- Artists have a Spotify ID (id_spotify) as PK, name, and popularity index.
+- Genres have a PK id_genero, name.
+- Albums have id_album (VARCHAR), title, release date, type (single, EP, album), linked to an Artist.
+- Songs have id_musica (VARCHAR), name, duration, audio features (energy, valence, danceability, BPM), linked to an Album.
+- Users have UUID PK, name, email, signup date.
+- Playlists have UUID PK, link, creation time, linked to a User.
+- There's a many-to-many for Artist-Genre (Pertence table) and Playlist-Song (Contém table with position).
+
+The technical rules say to use 3NF, UUIDs for User and Playlist (so need pgcrypto extension), VARCHAR for Spotify IDs, check constraints on audio features between 0-1, and ON DELETE CASCADE.
+
+Let me start by setting up the tables in order, considering dependencies. The order of creation should be tables without foreign keys first.
+
+First, the genres table. It has id_genero as PK. Then the artists table with id_spotify as PK. Then the Pertence table (Artist_Genre) which links Artists and Genres. Then Albums, linked to Artists. Songs linked to Albums. Users (with UUID), Playlists linked to Users. Then Contém (Playlist_Musica) linking Playlists and Songs with position.
+
+Wait, the Pertenece table is the many-to-many between Artist and Genre. So it needs foreign keys to both id_spotify (Artist) and id_genero (Genre). Similarly, Contém needs foreign keys to id_playlist (Playlist) and id_musica (Song), plus position.
+
+But the ER mapping says Pertence is the associative table for Artista_Genero, and Contém for Playlist_Musica. So yes.
+
+Also, the technical rules say to use UUID for User and Playlist. So User.id_usuario should be UUID, Playlist.id_playlist should be UUID. The ER mapping says User has id_usuario (PK), but the rules say to use UUID. So I need to create UUIDs for those, using pgcrypto.
+
+Wait, the ER mapping says Usuário has id_usuario (PK), but the technical rules say to use UUID. So I should change that to UUID, not the original id_usuario as a VARCHAR. Wait, the requirement says "Use UUID como chave primária autogerada para Usuário e Playlist." So the PK for User and Playlist should be UUID, not the id_usuario as a VARCHAR. Wait, but the ER mapping says "id_usuario (PK)" for User. Hmm, maybe the ER mapping is just indicating the primary key attribute name, but the technical rules dictate it should be UUID. So I'll create a UUID column for User.id_usuario and Playlist.id_playlist.
+
+Wait, the ER mapping says "Usuário: Atributos id_usuario (PK)", so the column name is id_usuario, but the type should be UUID. Similarly for Playlist's id_playlist. So I need to make sure those are UUIDs.
+
+Also, for the Spotify IDs (id_spotify, id_album, id_musica), they should be VARCHAR. So Artista.id_spotify (VARCHAR), Album.id_album (VARCHAR), Song.id_musica (VARCHAR).
+
+Now, let's structure the DDL.
+
+First, create the genres table.
+
+CREATE TABLE genero (
+    id_genero SERIAL PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL
+);
+
+Wait, but the ER says id_genero is PK. The technical rules don't specify, but since it's a PK, SERIAL is okay. Wait, the ER mapping says "id_genero (PK)", so it's a primary key. For simplicity, using SERIAL is acceptable here, as it's a surrogate key. But the problem says to use VARCHAR for Spotify IDs, but for other PKs, like id_genero, it's fine to use SERIAL.
+
+Next, artists table.
+
+CREATE TABLE artista (
+    id_spotify VARCHAR(255) PRIMARY KEY,
+    nome_completo VARCHAR(255) NOT NULL,
+    indice_popularidade FLOAT
+);
+
+Wait, the business requirements say "código de identificação único (proveniente do Spotify)", so id_spotify is the PK, VARCHAR. That's correct.
+
+Then, the Pertence table (Artista_Genero):
+
+CREATE TABLE pertence (
+    id_spotify VARCHAR(255) REFERENCES artista(id_spotify) ON DELETE CASCADE,
+    id_genero INTEGER REFERENCES genero(id_genero) ON DELETE CASCADE,
+    PRIMARY KEY (id_spotify, id_genero)
+);
+
+Wait, the ER mapping says "Pertence (Tabela Associativa Artista_Genero)", so the composite PK is (id_spotify, id_genero). So the primary key is both columns. Also, foreign keys to artista and genero.
+
+Then, albums:
+
+CREATE TABLE album (
+    id_album VARCHAR(255) PRIMARY KEY,
+    titulo VARCHAR(255) NOT NULL,
+    data_lancamento DATE NOT NULL,
+    tipo_lancamento VARCHAR(50) NOT NULL CHECK (tipo_lancamento IN ('single', 'EP', 'album'))
+);
+
+Wait, the business requirements say "tipo de lançamento (se é um 'single', um 'EP' ou um álbum completo)". So the check constraint should be on those values. So using a CHECK for those exact strings.
+
+Then, songs:
+
+CREATE TABLE musica (
+    id_musica VARCHAR(255) PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    duracao_ms INTEGER NOT NULL,
+    energia FLOAT CHECK (energia BETWEEN 0.0 AND 1.0),
+    valencia FLOAT CHECK (valencia BETWEEN 0.0 AND 1.0),
+    dancabilidade FLOAT CHECK (dancabilidade BETWEEN 0.0 AND 1.0),
+    bpm INTEGER,
+    id_album VARCHAR(255) REFERENCES album(id_album) ON DELETE CASCADE
+);
+
+Wait, the business requirements say "duração em milissegundos", so duracao_ms is INTEGER. The audio features (energy, valencia, dancabilidade) are FLOAT with 0-1.0 check. BPM is INTEGER (beats per minute, so integer).
+
+Now, users. The technical rules say to use UUID for PK. So:
+
+CREATE TABLE usuario (
+    id_usuario UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nome VARCHAR(255) NOT NULL,
+    email_institucional VARCHAR(255) NOT NULL,
+    data_cadastro DATE NOT NULL
+);
+
+Need to enable pgcrypto extension first. So the first line in the DDL should be CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+Then, playlists:
+
+CREATE TABLE playlist (
+    id_playlist UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    log_texto_pedido TEXT,
+    log_parametros_ia TEXT,
+    link_streaming VARCHAR(255),
+    data_hora_criacao TIMESTAMP NOT NULL,
+    id_usuario UUID REFERENCES usuario(id_usuario) ON DELETE CASCADE
+);
+
+Wait, the business requirements say "link de integração para a plataforma de streaming", so link_streaming should be a VARCHAR. The log_texto_pedido and log_parametros_ia are text fields. Data_hora_criacao is timestamp.
+
+Now, the Contém table (Playlist_Musica):
+
+CREATE TABLE contem (
+    id_playlist UUID REFERENCES playlist(id_playlist) ON DELETE CASCADE,
+    id_musica VARCHAR(255) REFERENCES musica(id_musica) ON DELETE CASCADE,
+    posicao INTEGER NOT NULL,
+    PRIMARY KEY (id_playlist, id_musica)
+);
+
+This is the many-to-many table with the position. The primary key is the combination of id_playlist and id_musica, as it's a composite key.
+
+Wait, the ER mapping says "Contém (Tabela Associativa Playlist_Musica): Relação N:N entre Playlist e Música. OBRIGATÓRIO conter o atributo posicao para definir a ordem sequencial da faixa."
+
+So yes, Contém has id_playlist, id_musica, and posicao. Primary key is the two foreign keys.
+
+Now, check for all foreign keys. For example, Album has id_album, which is linked to Music's id_album. So Music's id_album references Album's id_album.
+
+Now, the DML part.
+
+Need to insert:
+
+- 1 user curator.
+
+- 3 genres (Metal, Samba, Música Clássica). Wait, the problem says "3 gêneros diversificados (Metal, Samba e Música Clássica)."
+
+- 2 artists belonging to these genres, leaving 1 genre without an artist. So, for example, Metal and Samba have artists, but Música Clássica doesn't.
+
+Wait, the requirement says "2 artistas relevantes pertencentes a esses gêneros (deixando 1 gênero propositalmente sem artista)." So two artists, each belonging to two genres (but the problem says "pertencentes a esses gêneros", meaning the two artists are in the three genres, but one genre has no artists. So maybe one genre is left out. Let's say Metal and Samba have artists, Música Clássica doesn't.
+
+So, insert 3 genres:
+
+INSERT INTO genero (nome) VALUES ('Metal'), ('Samba'), ('Música Clássica');
+
+Then, two artists. Let's say Artist 1 is in Metal and Samba, Artist 2 is in Samba. Wait, but the problem says "2 artistas... deixando 1 gênero sem artista". So, if we have three genres, and two artists, one genre (Música Clássica) has no artists.
+
+So, for example:
+
+Artist A: belongs to Metal and Samba.
+
+Artist B: belongs to Samba.
+
+So, Metal has one artist, Samba has two, Música Clássica has none.
+
+Wait, but the problem says "2 artistas relevantes pertencentes a esses gêneros (deixando 1 gênero propositalmente sem artista)". So two artists, and one genre without any.
+
+So, genres: Metal, Samba, Música Clássica.
+
+Artists: Artist1 (Metal, Samba), Artist2 (Samba). So Música Clássica has no artist.
+
+Wait, but each artist can belong to multiple genres. So the Pertenece table will have entries for each artist-genre pair.
+
+So, for Artist1 (id_spotify 'artist1'), genres Metal (id 1) and Samba (id 2).
+
+Artist2 (id_spotify 'artist2'), genre Samba (id 2).
+
+Then Música Clássica (id 3) has no artists.
+
+Now, albums. Two albums. Let's say Album1 (id_album 'album1') by Artist1, Album2 (id_album 'album2') by Artist2.
+
+Each album has 2 songs.
+
+So, 4 songs total.
+
+Playlists: one playlist with two songs in Contém.
+
+Now, the DML:
+
+First, the genres:
+
+INSERT INTO genero (nome) VALUES ('Metal'), ('Samba'), ('Música Clássica');
+
+Artists:
+
+INSERT INTO artista (id_spotify, nome_completo, indice_popularidade) VALUES 
+('artist1', 'Metallica', 0.85),
+('artist2', 'Carmen Miranda', 0.75);
+
+Wait, but the problem says "2 artistas relevantes", so two entries.
+
+Then, Pertenece:
+
+INSERT INTO pertence (id_spotify, id_genero) VALUES 
+('artist1', 1),  -- Metal (id 1)
+('artist1', 2),  -- Samba (id 2)
+('artist2', 2);  -- Samba (id 2)
+
+Genres are inserted with id_genero as SERIAL, so Metal is 1, Samba 2, Música Clássica 3.
+
+Albums:
+
+INSERT INTO album (id_album, titulo, data_lancamento, tipo_lancamento) VALUES 
+('album1', 'Ride the Lightning', '1984-07-27', 'album'),
+('album2', 'Samba da Benção', '1950-01-01', 'single');
+
+Músicas:
+
+For album1 (id_album 'album1'), two songs:
+
+INSERT INTO musica (id_musica, nome, duracao_ms, energia, valencia, dancabilidade, bpm, id_album) VALUES 
+('music1', 'Fade to Black', 300000, 0.8, 0.2, 0.7, 120, 'album1'),
+('music2', 'Master of Puppets', 320000, 0.9, 0.3, 0.8, 130, 'album1');
+
+For album2 (id_album 'album2'), two songs:
+
+INSERT INTO musica (id_musica, nome, duracao_ms, energia, valencia, dancabilidade, bpm, id_album) VALUES 
+('music3', 'Samba do Avião', 200000, 0.5, 0.6, 0.9, 100, 'album2'),
+('music4', 'Benção', 250000, 0.4, 0.7, 0.8, 90, 'album2');
+
+Wait, but the problem says "2 álbuns e 4 músicas", so yes, two albums with two songs each.
+
+Users:
+
+INSERT INTO usuario (nome, email_institucional, data_cadastro) VALUES 
+('Curador1', 'curador1@startup.com', '2023-10-01');
+
+Playlists:
+
+Need to create a playlist with log_texto_pedido 'alta energia', etc.
+
+INSERT INTO playlist (log_texto_pedido, log_parametros_ia, link_streaming, data_hora_criacao, id_usuario) VALUES 
+('Criar uma lista de faixas de metal com BPM alto e baixa valência', 'energia: 0.8, BPM: 120', 'https://open.spotify.com/playlist/123', '2023-10-05 14:30:00', (SELECT id_usuario FROM usuario WHERE nome = 'Curador1'));
+
+Wait, but the id_usuario is UUID. So the INSERT should use the UUID generated for the user. However, in the DML, we can't use a subquery because the ID might not be known. Wait, but in the DML, we can use the UUID value, but since it's generated by gen_random_uuid(), we can't know it exactly. But for the purpose of the DML script, we can assume the UUID is generated and reference it via the user's name or email. However, in real scenarios, we'd have to insert the user first, then use its ID. But since this is a script, and the user is inserted first, the UUID for the user is generated. But in the script, how to reference it? Well, we can use a subquery to get the ID based on the email, which is unique.
+
+So in the playlist INSERT, we can do:
+
+id_usuario = (SELECT id_usuario FROM usuario WHERE email_institucional = 'curador1@startup.com')
+
+But since the email is unique, this should work.
+
+Then, Contém:
+
+INSERT INTO contem (id_playlist, id_musica, posicao) VALUES 
+((SELECT id_playlist FROM playlist WHERE log_texto_pedido = 'Criar uma lista de faixas de metal com BPM alto e baixa valência'), 'music1', 1),
+((SELECT id_playlist FROM playlist WHERE log_texto_pedido = 'Criar uma lista de faixas de metal com BPM alto e baixa valência'), 'music2', 2);
+
+Wait, but the problem says "mapeie 2 músicas para ela na tabela Contém, preenchendo a posicao." So two songs in the playlist, positions 1 and 2.
+
+Now, check if all the constraints are met.
+
+For example, the audio features have CHECK constraints between 0.0 and 1.0. The inserted values for energy, valencia, dancabilidade are in that range.
+
+Also, the types: tipo_lancamento must be 'single', 'EP', or 'album'. The albums inserted are 'album' and 'single', which are valid.
+
+Now, let's check if all foreign keys are correctly set.
+
+Albums reference artista via id_spotify? Wait, no. The album table does not have a foreign key to artista. Wait, the ER mapping says "Álbum: ... Relaciona-se com Artista (um artista Lança vários álbuns)." So there should be a foreign key from Album to Artista.
+
+Wait, in my DDL above, I have:
+
+CREATE TABLE album (
+    id_album VARCHAR(255) PRIMARY KEY,
+    titulo VARCHAR(255) NOT NULL,
+    data_lancamento DATE NOT NULL,
+    tipo_lancamento VARCHAR(50) NOT NULL CHECK (tipo_lancamento IN ('single', 'EP', 'album'))
+);
+
+But where is the foreign key to artist? The ER says "um álbum deve obrigatoriamente pertencer a um artista específico", so album should have a foreign key to artista.id_spotify.
+
+Ah, I missed that. So the Album table needs a foreign key to Artista. So I need to add a column id_artista VARCHAR(255) REFERENCES artista(id_spotify) ON DELETE CASCADE.
+
+Wait, the ER mapping says "Relaciona-se com Artista (um artista Lança vários álbuns)." So Album has a foreign key to Artista.
+
+So I need to add that to the album table.
+
+So the corrected album DDL:
+
+CREATE TABLE album (
+    id_album VARCHAR(255) PRIMARY KEY,
+    titulo VARCHAR(255) NOT NULL,
+    data_lancamento DATE NOT NULL,
+    tipo_lancamento VARCHAR(50) NOT NULL CHECK (tipo_lancamento IN ('single', 'EP', 'album')),
+    id_artista VARCHAR(255) REFERENCES artista(id_spotify) ON DELETE CASCADE
+);
+
+Ah, I missed that earlier. So in the album table, there's an id_artista foreign key. That's important.
+
+So when inserting the albums, we need to specify which artist they belong to.
+
+So for album1, id_artista should be 'artist1', and album2's id_artista is 'artist2'.
+
+So in the DML for albums:
+
+INSERT INTO album (id_album, titulo, data_lancamento, tipo_lancamento, id_artista) VALUES 
+('album1', 'Ride the Lightning', '1984-07-27', 'album', 'artist1'),
+('album2', 'Samba da Benção', '1950-01-01', 'single', 'artist2');
+
+That's a crucial correction. I missed the foreign key in the album table earlier.
+
+Now, for the music table, the id_album references the album's id_album, which is correct.
+
+Also, the user table has the UUID, which is generated by pgcrypto.
+
+Now, let's recheck all steps.
+
+1. Create extension pgcrypto.
+
+2. Create genero table.
+
+3. Create artista table.
+
+4. Create pertence table.
+
+5. Create album table with id_artista foreign key.
+
+6. Create musica table.
+
+7. Create usuario table with UUID.
+
+8. Create playlist table with UUID.
+
+9. Create contem table.
+
+Then, DML.
+
+Now, let's put it all together in the correct order.
+
+The order of table creation should be:
+
+- genero
+
+- artista
+
+- pertence (depends on artista and genero)
+
+- album (depends on artista)
+
+- musica (depends on album)
+
+- usuario
+
+- playlist (depends on usuario)
+
+- contem (depends on playlist and musica)
+
+So the DDL order should be:
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE genero (...);
+
+CREATE TABLE artista (...);
+
+CREATE TABLE pertence (...);
+
+CREATE TABLE album (...); -- includes id_artista referencing artista
+
+CREATE TABLE musica (...); -- references album
+
+CREATE TABLE usuario (...);
+
+CREATE TABLE playlist (...); -- references usuario
+
+CREATE TABLE contem (...); -- references playlist and musica
+
+Yes, that's correct.
+
+Now, let's write the DDL accordingly.
+
+For the pertence table, the foreign keys are to artista(id_spotify) and genero(id_genero).
+
+For album, id_artista references artista(id_spotify).
+
+For musica, id_album references album(id_album).
+
+For playlist, id_usuario references usuario(id_usuario).
+
+For contem, id_playlist references playlist(id_playlist), id_musica references musica(id_musica).
+
+Now, the DML.
+
+Let's make sure the artist IDs are correct.
+
+Artists:
+
+artist1: Metallica (id_spotify 'artist1')
+
+artist2: Carmen Miranda (id_spotify 'artist2')
+
+Genres:
+
+1: Metal
+
+2: Samba
+
+3: Música Clássica
+
+Albums:
+
+album1: Ride the Lightning (id_album 'album1'), by artist1 (id_artista 'artist1')
+
+album2: Samba da Benção (id_album 'album2'), by artist2 ('artist2')
+
+Songs:
+
+music1: Fade to Black (album1)
+
+music2: Master of Puppets (album1)
+
+music3: Samba do Avião (album2)
+
+music4: Benção (album2)
+
+Users:
+
+Curador1, email curador1@startup.com
+
+Playlist:
+
+log_texto_pedido: 'Criar uma lista de faixas de metal com BPM alto e baixa valência'
+
+log_parametros_ia: 'energia: 0.8, BPM: 120'
+
+link_streaming: 'https://open.spotify.com/playlist/123'
+
+data_hora_criacao: '2023-10-05 14:30:00'
+
+id_usuario: the UUID of Curador1.
+
+Contém:
+
+For playlist, two songs: music1 and music2, positions 1 and 2.
+
+Now, let's write the DML.
+
+But note that in PostgreSQL, the UUIDs for the user and playlist are generated by gen_random_uuid(), so we can't know them exactly. But in the DML, we insert the user first, then reference it by email in the playlist. Similarly, the playlist is inserted after the user, so the SELECT in the playlist INSERT will find the user's ID.
+
+So the DML should be:
+
+INSERT INTO genero (nome) VALUES ('Metal'), ('Samba'), ('Música Clássica');
+
+INSERT INTO artista (id_spotify, nome_completo, indice_popularidade) VALUES 
+('artist1', 'Metallica', 0.85),
+('artist2', 'Carmen Miranda', 0.75);
+
+INSERT INTO pertence (id_spotify, id_genero) VALUES 
+('artist1', 1),
+('artist1', 2),
+('artist2', 2);
+
+INSERT INTO album (id_album, titulo, data_lancamento, tipo_lancamento, id_artista) VALUES 
+('album1', 'Ride the Lightning', '1984-07-27', 'album', 'artist1'),
+('album2', 'Samba da Benção', '1950-01-01', 'single', 'artist2');
+
+INSERT INTO musica (id_musica, nome, duracao_ms, energia, valencia, dancabilidade, bpm, id_album) VALUES 
+('music1', 'Fade to Black', 300000, 0.8, 0.2, 0.7, 120, 'album1'),
+('music2', 'Master of Puppets', 320000, 0.9, 0.3, 0.8, 130, 'album1'),
+('music3', 'Samba do Avião', 200000, 0.5, 0.6, 0.9, 100, 'album2'),
+('music4', 'Benção', 250000, 0.4, 0.7, 0.8, 90, 'album2');
+
+INSERT INTO usuario (nome, email_institucional, data_cadastro) VALUES 
+('Curador1', 'curador1@startup.com', '2023-10-01');
+
+INSERT INTO playlist (log_texto_pedido, log_parametros_ia, link_streaming, data_hora_criacao, id_usuario) VALUES 
+('Criar uma lista de faixas de metal com BPM alto e baixa valência', 'energia: 0.8, BPM: 120', 'https://open.spotify.com/playlist/123', '2023-10-05 14:30:00', (SELECT id_usuario FROM usuario WHERE email_institucional = 'curador1@startup.com'));
+
+INSERT INTO contem (id_playlist, id_musica, posicao) VALUES 
+((SELECT id_playlist FROM playlist WHERE log_texto_pedido = 'Criar uma lista de faixas de metal com BPM alto e baixa valência'), 'music1', 1),
+((SELECT id_playlist FROM playlist WHERE log_texto_pedido = 'Criar uma lista de faixas de metal com BPM alto e baixa valência'), 'music2', 2);
+
+Now, check for any possible errors.
+
+- The album table now includes id_artista, which references artista(id_spotify). So the album entries correctly point to the artists.
+
+- The pertence table correctly links artists to genres.
+
+- The DML for the playlist uses a subquery to get the user's ID, which should work.
+
+- The contem table references the playlist ID via the subquery.
+
+Now, check the CHECK constraints:
+
+- For tipo_lancamento: 'album', 'single' are valid.
+
+- Audio features: values between 0.0 and 1.0.
+
+For example, music1 has energy 0.8, valencia 0.2, dancabilidade 0.7, which are all in [0,1].
+
+Okay.
+
+Now, write the full DDL and DML.
+
+Make sure to use proper syntax. For example, in the CREATE TABLE for album, the id_artista is a foreign key.
+
+Also, note that the business requirements say "código único de identificação único (proveniente do Spotify)" for artist, album, and music, so using VARCHAR as specified.
+
+Now, let's put it all together.
+</think>
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE genero (
+    id_genero SERIAL PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE artista (
+    id_spotify VARCHAR(255) PRIMARY KEY,
+    nome_completo VARCHAR(255) NOT NULL,
+    indice_popularidade FLOAT
+);
+
+CREATE TABLE pertence (
+    id_spotify VARCHAR(255) REFERENCES artista(id_spotify) ON DELETE CASCADE,
+    id_genero INTEGER REFERENCES genero(id_genero) ON DELETE CASCADE,
+    PRIMARY KEY (id_spotify, id_genero)
+);
+
+CREATE TABLE album (
+    id_album VARCHAR(255) PRIMARY KEY,
+    titulo VARCHAR(255) NOT NULL,
+    data_lancamento DATE NOT NULL,
+    tipo_lancamento VARCHAR(50) NOT NULL CHECK (tipo_lancamento IN ('single', 'EP', 'album')),
+    id_artista VARCHAR(255) REFERENCES artista(id_spotify) ON DELETE CASCADE
+);
+
+CREATE TABLE musica (
+    id_musica VARCHAR(255) PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    duracao_ms INTEGER NOT NULL,
+    energia FLOAT CHECK (energia BETWEEN 0.0 AND 1.0),
+    valencia FLOAT CHECK (valencia BETWEEN 0.0 AND 1.0),
+    dancabilidade FLOAT CHECK (dancabilidade BETWEEN 0.0 AND 1.0),
+    bpm INTEGER,
+    id_album VARCHAR(255) REFERENCES album(id_album) ON DELETE CASCADE
+);
+
+CREATE TABLE usuario (
+    id_usuario UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nome VARCHAR(255) NOT NULL,
+    email_institucional VARCHAR(255) NOT NULL,
+    data_cadastro DATE NOT NULL
+);
+
+CREATE TABLE playlist (
+    id_playlist UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    log_texto_pedido TEXT,
+    log_parametros_ia TEXT,
+    link_streaming VARCHAR(255),
+    data_hora_criacao TIMESTAMP NOT NULL,
+    id_usuario UUID REFERENCES usuario(id_usuario) ON DELETE CASCADE
+);
+
+CREATE TABLE contem (
+    id_playlist UUID REFERENCES playlist(id_playlist) ON DELETE CASCADE,
+    id_musica VARCHAR(255) REFERENCES musica(id_musica) ON DELETE CASCADE,
+    posicao INTEGER NOT NULL,
+    PRIMARY KEY (id_playlist, id_musica)
+);
+
+-- DML Inicial
+INSERT INTO genero (nome) VALUES 
+('Metal'), 
+('Samba'), 
+('Música Clássica');
+
+INSERT INTO artista (id_spotify, nome_completo, indice_popularidade) VALUES 
+('artist1', 'Metallica', 0.85),
+('artist2', 'Carmen Miranda', 0.75);
+
+INSERT INTO pertence (id_spotify, id_genero) VALUES 
+('artist1', 1),
+('artist1', 2),
+('artist2', 2);
+
+INSERT INTO album (id_album, titulo, data_lancamento, tipo_lancamento, id_artista) VALUES 
+('album1', 'Ride the Lightning', '1984-07-27', 'album', 'artist1'),
+('album2', 'Samba da Benção', '1950-01-01', 'single', 'artist2');
+
+INSERT INTO musica (id_musica, nome, duracao_ms, energia, valencia, dancabilidade, bpm, id_album) VALUES 
+('music1', 'Fade to Black', 300000, 0.8, 0.2, 0.7, 120, 'album1'),
+('music2', 'Master of Puppets', 320000, 0.9, 0.3, 0.8, 130, 'album1'),
+('music3', 'Samba do Avião', 200000, 0.5, 0.6, 0.9, 100, 'album2'),
+('music4', 'Benção', 250000, 0.4, 0.7, 0.8, 90, 'album2');
+
+INSERT INTO usuario (nome, email_institucional, data_cadastro) VALUES 
+('Curador1', 'curador1@startup.com', '2023-10-01');
+
+INSERT INTO playlist (log_texto_pedido, log_parametros_ia, link_streaming, data_hora_criacao, id_usuario) VALUES 
+('Criar uma lista de faixas de metal com BPM alto e baixa valência', 'energia: 0.8, BPM: 120', 'https://open.spotify.com/playlist/123', '2023-10-05 14:30:00', (SELECT id_usuario FROM usuario WHERE email_institucional = 'curador1@startup.com'));
+
+INSERT INTO contem (id_playlist, id_musica, posicao) VALUES 
+((SELECT id_playlist FROM playlist WHERE log_texto_pedido = 'Criar uma lista de faixas de metal com BPM alto e baixa valência'), 'music1', 1),
+((SELECT id_playlist FROM playlist WHERE log_texto_pedido = 'Criar uma lista de faixas de metal com BPM alto e baixa valência'), 'music2', 2);
