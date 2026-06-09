@@ -1,99 +1,78 @@
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-CREATE TABLE usuarios (
-    id_usuario UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    nome VARCHAR(100) NOT NULL,
-    email_institucional VARCHAR(100) UNIQUE NOT NULL,
-    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+/* ====================================================================
+   3. RECURSOS AVANÇADOS (SQL 3, OTIMIZAÇÃO E TRANSAÇÕES)
+   ==================================================================== */
 
-CREATE TABLE artistas (
-    id_spotify VARCHAR(50) PRIMARY KEY,
-    nome_completo VARCHAR(100) NOT NULL,
-    indice_popularidade INT
-);
+-- 3.1 ALTERAÇÃO DE TABELA (Preparação para o Trigger)
+ALTER TABLE playlists ADD COLUMN data_ultima_modificacao TIMESTAMP;
 
-CREATE TABLE generos (
-    id_genero SERIAL PRIMARY KEY,
-    nome VARCHAR(100) UNIQUE NOT NULL
-);
+-- 3.2 SQL 3: CRIAÇÃO DE VIEW
+-- Mostra o nome do usuário, log textual do pedido, quantidade de músicas e a média de energia.
+CREATE OR REPLACE VIEW vw_relatorio_curadoria AS
+SELECT
+    u.nome AS nome_usuario,
+    p.log_texto_pedido,
+    COUNT(i.musica_id) AS total_musicas,
+    ROUND(AVG(m.energia)::numeric, 2) AS media_energia
+FROM playlists p
+JOIN usuarios u ON p.usuario_id = u.id_usuario
+JOIN itens_playlist i ON p.id_playlist = i.playlist_id
+JOIN musicas m ON i.musica_id = m.id_musica
+GROUP BY u.nome, p.log_texto_pedido;
 
-CREATE TABLE artistas_generos (
-    artista_id VARCHAR(50) NOT NULL REFERENCES artistas(id_spotify) ON DELETE CASCADE,
-    genero_id INT NOT NULL REFERENCES generos(id_genero) ON DELETE CASCADE,
-    PRIMARY KEY (artista_id, genero_id)
-);
+-- 3.3 SQL 3: CRIAÇÃO DE FUNÇÃO E TRIGGER
+-- Atualiza automaticamente a coluna data_ultima_modificacao num UPDATE da playlist
+CREATE OR REPLACE FUNCTION fn_atualiza_modificacao_playlist()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.data_ultima_modificacao = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-CREATE TABLE albuns (
-    id_album VARCHAR(50) PRIMARY KEY,
-    artista_id VARCHAR(50) NOT NULL REFERENCES artistas(id_spotify) ON DELETE CASCADE,
-    titulo VARCHAR(200) NOT NULL,
-    data_lancamento DATE NOT NULL,
-    tipo_lancamento VARCHAR(50)
-);
+CREATE TRIGGER trg_modificacao_playlist
+BEFORE UPDATE ON playlists
+FOR EACH ROW
+EXECUTE FUNCTION fn_atualiza_modificacao_playlist();
 
-CREATE TABLE musicas (
-    id_musica VARCHAR(50) PRIMARY KEY,
-    album_id VARCHAR(50) NOT NULL REFERENCES albuns(id_album) ON DELETE CASCADE,
-    nome VARCHAR(200) NOT NULL,
-    duracao_ms INT NOT NULL,
-    energia REAL,
-    valencia REAL,
-    dancabilidade REAL,
-    bpm REAL
-);
+-- 3.4 OTIMIZAÇÃO E INDEXAÇÃO
+-- Criação de índices para otimizar buscas textuais comuns no sistema
+CREATE INDEX idx_artistas_nome ON artistas(nome_completo);
+CREATE INDEX idx_musicas_nome ON musicas(nome);
 
-CREATE TABLE playlists (
-    id_playlist UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    usuario_id UUID NOT NULL REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
-    log_texto_pedido TEXT NOT NULL,
-    log_parametros_ia TEXT,
-    link_streaming VARCHAR(255),
-    data_hora_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+/* EXEMPLO DE USO DO EXPLAIN ANALYZE (Comentário Exigido):
+Para verificar se o índice está sendo usado na busca por uma música, executar:
+EXPLAIN ANALYZE SELECT * FROM musicas WHERE nome = 'Ratamahatta';
+Isso mostrará um "Index Scan" ao invés de um "Seq Scan" no plano de execução.
+*/
 
-CREATE TABLE itens_playlist (
-    playlist_id UUID NOT NULL REFERENCES playlists(id_playlist) ON DELETE CASCADE,
-    musica_id VARCHAR(50) NOT NULL REFERENCES musicas(id_musica) ON DELETE CASCADE,
-    posicao INT NOT NULL,
-    PRIMARY KEY (playlist_id, musica_id)
-);
+-- 3.5 CONTROLE DE CONCORRÊNCIA E TRANSAÇÕES
+-- Simulando a inserção de uma playlist garantindo as propriedades ACID
+BEGIN;
 
-INSERT INTO usuarios (nome, email_institucional)
-VALUES ('usuario_generico', 'usuario_generico@startupmusical.com');
+    -- Salva um ponto de restauração caso dê erro nos itens
+    SAVEPOINT sp_antes_playlist;
 
-INSERT INTO generos (nome) VALUES
-('Metal'),
-('Samba'),
-('Música Clássica');
+    -- Tenta inserir uma nova playlist
+    INSERT INTO playlists (id_playlist, usuario_id, log_texto_pedido, log_parametros_ia, link_streaming)
+    VALUES (
+        '123e4567-e89b-12d3-a456-426614174000', -- UUID fixo para exemplo da transação
+        (SELECT id_usuario FROM usuarios LIMIT 1),
+        'Playlist transacional de teste',
+        '{"energia_alvo": 0.5}',
+        'http://streaming.com/teste'
+    );
 
-INSERT INTO artistas (id_spotify, nome_completo, indice_popularidade) VALUES
-('art_sepultura', 'Sepultura', 68),
-('art_cartola', 'Cartola', 55);
+    -- Insere um item na playlist atrelado ao UUID gerado acima
+    INSERT INTO itens_playlist (playlist_id, musica_id, posicao)
+    VALUES ('123e4567-e89b-12d3-a456-426614174000', 'trk_roots', 1);
 
-INSERT INTO artistas_generos (artista_id, genero_id) VALUES
-('art_sepultura', (SELECT id_genero FROM generos WHERE nome = 'Metal')),
-('art_cartola', (SELECT id_genero FROM generos WHERE nome = 'Samba'));
+    -- Se tudo deu certo até aqui, confirma a transação
+COMMIT;
+-- Em caso de erro dinâmico na aplicação, o SGBD chamaria ROLLBACK TO sp_antes_playlist;
 
-INSERT INTO albuns (id_album, artista_id, titulo, data_lancamento, tipo_lancamento) VALUES
-('alb_roots', 'art_sepultura', 'Roots', '1996-02-20', 'album'),
-('alb_verde', 'art_cartola', 'Verde Que Te Quero Rosa', '1977-01-01', 'album');
+/* 3.6 COMANDO DE BACKUP (pg_dump)
+O comando abaixo deve ser executado no terminal do SO para gerar o backup:
 
-INSERT INTO musicas (id_musica, album_id, nome, duracao_ms, energia, valencia, dancabilidade, bpm) VALUES
-('trk_roots', 'alb_roots', 'Roots Bloody Roots', 212000, 0.98, 0.20, 0.45, 108.0),
-('trk_ratamahatta', 'alb_roots', 'Ratamahatta', 270000, 0.95, 0.35, 0.50, 115.0),
-('trk_rosas', 'alb_verde', 'As Rosas Não Falam', 178000, 0.25, 0.60, 0.55, 90.0),
-('trk_moinho', 'alb_verde', 'O Mundo É Um Moinho', 235000, 0.30, 0.45, 0.40, 85.0);
-
-INSERT INTO playlists (usuario_id, log_texto_pedido, log_parametros_ia, link_streaming)
-VALUES (
-    (SELECT id_usuario FROM usuarios WHERE email_institucional = 'usuario_generico@startupmusical.com'),
-    'Quero uma playlist com energia máxima, ritmo pesado e agressivo para treino.',
-    '{"energia_alvo": "> 0.90", "bpm_alvo": "> 100"}',
-    'https://open.spotify.com/playlist/metal_treino_01'
-);
-
-INSERT INTO itens_playlist (playlist_id, musica_id, posicao)
-VALUES
-    ((SELECT id_playlist FROM playlists LIMIT 1), 'trk_roots', 1),
-    ((SELECT id_playlist FROM playlists LIMIT 1), 'trk_ratamahatta', 2);
+pg_dump -U postgres -F c -d nome_do_banco -f backup_startup_musical.dump
+*/
