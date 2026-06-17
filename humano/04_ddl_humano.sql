@@ -79,7 +79,7 @@ CREATE TABLE itens_playlist (
     playlist_id UUID NOT NULL REFERENCES playlists(id_playlist) ON DELETE CASCADE,
     musica_id VARCHAR(50) NOT NULL REFERENCES musicas(id_musica) ON DELETE CASCADE,
     posicao INT NOT NULL,
-    PRIMARY KEY (playlist_id, musica_id)
+    PRIMARY KEY (playlist_id, posicao)
 );
 
 ALTER TABLE playlists ADD COLUMN data_ultima_modificacao TIMESTAMP;
