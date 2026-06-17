@@ -18,7 +18,6 @@ CREATE TABLE generos (
     nome VARCHAR(100) UNIQUE NOT NULL
 );
 
--- ADIÇÃO 1: Tabela associativa recursiva para permitir Herança Múltipla de Gêneros
 CREATE TABLE generos_hierarquia (
     genero_pai_id INT NOT NULL REFERENCES generos(id_genero) ON DELETE CASCADE,
     genero_filho_id INT NOT NULL REFERENCES generos(id_genero) ON DELETE CASCADE,
@@ -39,7 +38,6 @@ CREATE TABLE albuns (
     tipo_lancamento VARCHAR(50)
 );
 
--- ADIÇÃO 2: Inclusão das restrições CHECK para garantir a integridade matemática da IA
 CREATE TABLE musicas (
     id_musica VARCHAR(50) PRIMARY KEY,
     album_id VARCHAR(50) NOT NULL REFERENCES albuns(id_album) ON DELETE CASCADE,
@@ -51,15 +49,13 @@ CREATE TABLE musicas (
     bpm REAL
 );
 
--- ADIÇÃO 3: Tabela associativa conectando Música e Artista (com o atributo de 'papel')
 CREATE TABLE musicas_artistas (
     musica_id VARCHAR(50) NOT NULL REFERENCES musicas(id_musica) ON DELETE CASCADE,
     artista_id VARCHAR(50) NOT NULL REFERENCES artistas(id_spotify) ON DELETE CASCADE,
-    papel VARCHAR(50) NOT NULL, -- Ex: 'Principal', 'Feature', 'Produtor'
+    papel VARCHAR(50) NOT NULL,
     PRIMARY KEY (musica_id, artista_id, papel)
 );
 
--- ADIÇÃO 4: Tabela associativa conectando Música e Gênero
 CREATE TABLE musicas_generos (
     musica_id VARCHAR(50) NOT NULL REFERENCES musicas(id_musica) ON DELETE CASCADE,
     genero_id INT NOT NULL REFERENCES generos(id_genero) ON DELETE CASCADE,
@@ -75,40 +71,16 @@ CREATE TABLE playlists (
     data_hora_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE playlists_colaboradores (
+    playlist_id UUID NOT NULL REFERENCES playlists(id_playlist) ON DELETE CASCADE,
+    usuario_id UUID NOT NULL REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+    data_ingresso TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (playlist_id, usuario_id)
+);
+
 CREATE TABLE itens_playlist (
     playlist_id UUID NOT NULL REFERENCES playlists(id_playlist) ON DELETE CASCADE,
     musica_id VARCHAR(50) NOT NULL REFERENCES musicas(id_musica) ON DELETE CASCADE,
     posicao INT NOT NULL,
     PRIMARY KEY (playlist_id, posicao)
 );
-
-ALTER TABLE playlists ADD COLUMN data_ultima_modificacao TIMESTAMP;
-
--- Atualização da View para refletir que as músicas continuam acessíveis, mas a lógica se mantém igual
-CREATE OR REPLACE VIEW vw_relatorio_curadoria AS
-SELECT
-    u.nome AS nome_usuario,
-    p.log_texto_pedido,
-    COUNT(i.musica_id) AS total_musicas,
-    ROUND(AVG(m.energia)::numeric, 2) AS media_energia
-FROM playlists p
-JOIN usuarios u ON p.usuario_id = u.id_usuario
-JOIN itens_playlist i ON p.id_playlist = i.playlist_id
-JOIN musicas m ON i.musica_id = m.id_musica
-GROUP BY u.nome, p.log_texto_pedido;
-
-CREATE OR REPLACE FUNCTION fn_atualiza_modificacao_playlist()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.data_ultima_modificacao = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_modificacao_playlist
-BEFORE UPDATE ON playlists
-FOR EACH ROW
-EXECUTE FUNCTION fn_atualiza_modificacao_playlist();
-
-CREATE INDEX idx_artistas_nome ON artistas(nome_completo);
-CREATE INDEX idx_musicas_nome ON musicas(nome);

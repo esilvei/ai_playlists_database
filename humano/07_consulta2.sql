@@ -1,4 +1,5 @@
-SELECT 
+EXPLAIN ANALYZE
+SELECT
     u.nome AS curador,
     p.log_texto_pedido AS prompt_da_ia,
     COUNT(i.musica_id) AS total_musicas,

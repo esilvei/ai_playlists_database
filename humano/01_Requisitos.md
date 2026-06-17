@@ -13,7 +13,7 @@ Os Requisitos Funcionais descrevem o que o sistema (banco de dados) deve ser cap
 * **RF02 - Catálogo de Artistas:** O sistema deve registrar os artistas utilizando o código único do Spotify como identificador, armazenando também o nome completo e o índice de popularidade.
 * **RF03 - Catálogo de Álbuns:** O sistema deve armazenar álbuns musicais com seu código único, título, data de lançamento e tipo de lançamento (álbum, single, EP).
 * **RF04 - Acervo de Músicas:** O sistema deve registrar as músicas com suas características acústicas utilizadas pela IA (duração em milissegundos, energia, valência, dançabilidade e BPM).
-* **RF05 - Gestão de Gêneros:** O sistema deve cadastrar os gêneros musicais, permitindo a criação de uma árvore de subgêneros (hierarquia/recursividade).
+* **RF05 - Gestão de Gêneros:** O sistema deve cadastrar os gêneros musicais, permitindo a criação de uma rede de relacionamentos (Grafo de Conhecimento) entre eles, suportando mapeamento de derivações e fusão de estilos.
 * **RF06 - Auditoria de Playlists (IA):** O sistema deve registrar as playlists geradas pela inteligência artificial. Cada registro deve conter um identificador único, o texto exato do pedido (prompt), os parâmetros interpretados pela IA (log), o link de streaming gerado, a data/hora de criação e qual curador solicitou.
 * **RF07 - Rastreamento de Itens da Playlist:** O sistema deve armazenar exatamente quais músicas compõem cada playlist, registrando a ordem exata (posição) de reprodução.
 * **RF08 - Histórico e Relatórios:** O banco deve fornecer dados rastreáveis para a geração de relatórios gerenciais sobre gêneros mais pedidos, médias acústicas (ex: energia média) e contagem de artistas nas curadorias.
