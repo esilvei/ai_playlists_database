@@ -18,6 +18,13 @@ CREATE TABLE generos (
     nome VARCHAR(100) UNIQUE NOT NULL
 );
 
+-- ADIÇÃO 1: Tabela associativa recursiva para permitir Herança Múltipla de Gêneros
+CREATE TABLE generos_hierarquia (
+    genero_pai_id INT NOT NULL REFERENCES generos(id_genero) ON DELETE CASCADE,
+    genero_filho_id INT NOT NULL REFERENCES generos(id_genero) ON DELETE CASCADE,
+    PRIMARY KEY (genero_pai_id, genero_filho_id)
+);
+
 CREATE TABLE artistas_generos (
     artista_id VARCHAR(50) NOT NULL REFERENCES artistas(id_spotify) ON DELETE CASCADE,
     genero_id INT NOT NULL REFERENCES generos(id_genero) ON DELETE CASCADE,
@@ -32,15 +39,31 @@ CREATE TABLE albuns (
     tipo_lancamento VARCHAR(50)
 );
 
+-- ADIÇÃO 2: Inclusão das restrições CHECK para garantir a integridade matemática da IA
 CREATE TABLE musicas (
     id_musica VARCHAR(50) PRIMARY KEY,
     album_id VARCHAR(50) NOT NULL REFERENCES albuns(id_album) ON DELETE CASCADE,
     nome VARCHAR(200) NOT NULL,
     duracao_ms INT NOT NULL,
-    energia REAL,
-    valencia REAL,
-    dancabilidade REAL,
+    energia REAL CHECK (energia >= 0.0 AND energia <= 1.0),
+    valencia REAL CHECK (valencia >= 0.0 AND valencia <= 1.0),
+    dancabilidade REAL CHECK (dancabilidade >= 0.0 AND dancabilidade <= 1.0),
     bpm REAL
+);
+
+-- ADIÇÃO 3: Tabela associativa conectando Música e Artista (com o atributo de 'papel')
+CREATE TABLE musicas_artistas (
+    musica_id VARCHAR(50) NOT NULL REFERENCES musicas(id_musica) ON DELETE CASCADE,
+    artista_id VARCHAR(50) NOT NULL REFERENCES artistas(id_spotify) ON DELETE CASCADE,
+    papel VARCHAR(50) NOT NULL, -- Ex: 'Principal', 'Feature', 'Produtor'
+    PRIMARY KEY (musica_id, artista_id, papel)
+);
+
+-- ADIÇÃO 4: Tabela associativa conectando Música e Gênero
+CREATE TABLE musicas_generos (
+    musica_id VARCHAR(50) NOT NULL REFERENCES musicas(id_musica) ON DELETE CASCADE,
+    genero_id INT NOT NULL REFERENCES generos(id_genero) ON DELETE CASCADE,
+    PRIMARY KEY (musica_id, genero_id)
 );
 
 CREATE TABLE playlists (
@@ -61,6 +84,7 @@ CREATE TABLE itens_playlist (
 
 ALTER TABLE playlists ADD COLUMN data_ultima_modificacao TIMESTAMP;
 
+-- Atualização da View para refletir que as músicas continuam acessíveis, mas a lógica se mantém igual
 CREATE OR REPLACE VIEW vw_relatorio_curadoria AS
 SELECT
     u.nome AS nome_usuario,

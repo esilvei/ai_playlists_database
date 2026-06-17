@@ -37,37 +37,3 @@ VALUES
     ((SELECT id_playlist FROM playlists LIMIT 1), 'trk_roots', 1),
     ((SELECT id_playlist FROM playlists LIMIT 1), 'trk_ratamahatta', 2);
 
-BEGIN;
-
-    SAVEPOINT sp_antes_playlist;
-    INSERT INTO playlists (id_playlist, usuario_id, log_texto_pedido, log_parametros_ia, link_streaming)
-    VALUES (
-        '123e4567-e89b-12d3-a456-426614174000', -- UUID fixo para exemplo da transação
-        (SELECT id_usuario FROM usuarios LIMIT 1),
-        'Playlist transacional de teste',
-        '{"energia_alvo": 0.5}',
-        'http://streaming.com/teste'
-    );
-
-    -- Insere um item na playlist atrelado ao UUID gerado acima
-    INSERT INTO itens_playlist (playlist_id, musica_id, posicao)
-    VALUES ('123e4567-e89b-12d3-a456-426614174000', 'trk_roots', 1);
-
-COMMIT;
--- Em caso de erro dinâmico na aplicação, o SGBD chamaria ROLLBACK TO sp_antes_playlist;
-
-
-/* ====================================================================
-   OTIMIZAÇÃO E ADMINISTRAÇÃO
-   ==================================================================== */
-
-/* 1. EXEMPLO DE USO DO EXPLAIN ANALYZE:
-Para verificar se o índice está sendo usado na busca por uma música, executar:
-EXPLAIN ANALYZE SELECT * FROM musicas WHERE nome = 'Ratamahatta';
-Isso mostrará um "Index Scan" ao invés de um "Seq Scan" no plano de execução.
-*/
-
-/* 2. COMANDO DE BACKUP (pg_dump):
-O comando abaixo deve ser executado no terminal do SO pelo DBA para gerar o backup:
-pg_dump -U postgres -F c -d nome_do_banco -f backup_startup_musical.dump
-*/
